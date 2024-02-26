@@ -1,29 +1,29 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity 0.8.16;
 
-import '@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol';
-import '@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol';
-import '@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol';
+import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 
 /**
  * @title hsETH token Contract
  * @author Stader Labs
  * @notice The ERC20 contract for the hsETH token
  */
-
 contract HSETH is Initializable, ERC20Upgradeable, PausableUpgradeable, AccessControlUpgradeable {
+    error ZeroAddress();
 
-    bytes32 public constant MINTER_ROLE = keccak256('MINTER_ROLE');
-    bytes32 public constant BURNER_ROLE = keccak256('BURNER_ROLE');
+    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+    bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
-    function initialize(address _admin) external initializer {
-        //TODO put a zero address check for _admin
-        __ERC20_init('hsETH', 'hsETH');
+    function initialize(address _admin) external initializer onlyNonZeroAddress(_admin) {
+        __ERC20_init("hsETH", "hsETH");
         __Pausable_init();
         __AccessControl_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
@@ -51,8 +51,7 @@ contract HSETH is Initializable, ERC20Upgradeable, PausableUpgradeable, AccessCo
      * @dev Triggers stopped state.
      * Contract must not be paused.
      */
-    function pause() external {
-        //TODO put a role for this (introduce PAUSER role?)
+    function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }
 
@@ -64,4 +63,10 @@ contract HSETH is Initializable, ERC20Upgradeable, PausableUpgradeable, AccessCo
         _unpause();
     }
 
+    modifier onlyNonZeroAddress(address _addr) {
+        if (_addr == address(0)) {
+            revert ZeroAddress();
+        }
+        _;
+    }
 }
