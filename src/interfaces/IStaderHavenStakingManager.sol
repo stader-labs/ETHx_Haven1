@@ -3,8 +3,17 @@ pragma solidity 0.8.16;
 
 interface IStaderHavenStakingManager {
     error ZeroAddress();
+    error InvalidInput();
     error InvalidDepositAmount();
     error InvalidWithdrawAmount();
+
+    event UpdatedHsETHTokenAddress(address hsETH);
+
+    event UpdatedTreasuryAddress(address treasury);
+
+    event UpdatedProtocolFee(uint256 protocolFeeBIPS);
+
+    event StaderConfigAddressUpdated(address staderConfig);
 
     event WithdrawnProtocolFees(address treasury, uint256 protocolFeesAmount);
 

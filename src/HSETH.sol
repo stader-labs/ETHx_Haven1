@@ -15,7 +15,7 @@ contract HSETH is Initializable, ERC20Upgradeable, PausableUpgradeable, AccessCo
 
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
-    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+    bytes32 public constant MANAGER = keccak256("MANAGER");
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -51,7 +51,7 @@ contract HSETH is Initializable, ERC20Upgradeable, PausableUpgradeable, AccessCo
      * @dev Triggers stopped state.
      * Contract must not be paused.
      */
-    function pause() external onlyRole(PAUSER_ROLE) {
+    function pause() external onlyRole(MANAGER) {
         _pause();
     }
 

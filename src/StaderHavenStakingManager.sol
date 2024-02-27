@@ -19,27 +19,26 @@ import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol"
  * @notice The ETHx wrapper of hsETH token to interact with ETHx smart contracts
  */
 contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlUpgradeable, PausableUpgradeable {
-    using SafeMath for uint256;
     using SafeERC20Upgradeable for IERC20Upgradeable;
 
-    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+    bytes32 public constant MANAGER = keccak256("MANAGER");
 
     uint256 public constant DECIMAL = 1e18;
-    //total fee in BIPS
+    ///@notice total fee in BIPS.
     uint256 public constant totalFee = 10_000;
-    uint256 lastStoredHsETHToETHxER;
-    //store the exchange rate of hsETH to ETH
+    ///@notice maximum protocol fee value
+    uint256 public constant MAX_PROTOCOL_FEE_BIPS = 1500;
+    ///@notice last stored exchange rate of ETHx token.
     uint256 public lastStoredETHxER;
-    //store the amount of protocol fees in ETHx token
+    ///@notice last stored amount of protocol fees in ETHx token.
     uint256 public lastStoredProtocolFeesAmount;
-    //protocol fee in BIPS
+    ///@notice protocol fee in BIPS.
     uint256 public protocolFeeBIPS;
-    //haven1 protocol treasury address for rewards
+    ///@notice Haven1 protocol treasury address for rewards.
     address public treasury;
-
-    //address of ETHx's config contract
+    ///@notice address of ETHx's config contract.
     IStaderConfig public staderConfig;
-
+    ///@notice address of hsETH token contract.
     HSETH public hsETH;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -50,16 +49,20 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
     function initialize(
         address _admin,
         address _hsETH,
+        address _treasury,
         address _staderConfig
     )
         external
         initializer
         onlyNonZeroAddress(_admin)
         onlyNonZeroAddress(_hsETH)
+        onlyNonZeroAddress(_treasury)
         onlyNonZeroAddress(_staderConfig)
     {
         __Pausable_init();
         __AccessControl_init();
+        protocolFeeBIPS = 0; //TODO set a value
+        treasury = _treasury;
         hsETH = HSETH(_hsETH);
         staderConfig = IStaderConfig(_staderConfig);
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
@@ -105,9 +108,9 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
 
     /**
      * @notice transfers protocol reward to the treasury.
-     * @dev protocol fee is stored in ETHx token amount.
+     * @dev protocol fees is stored in ETHx token amount.
      */
-    function withdrawProtocolFees() external {
+    function withdrawProtocolFees() external onlyRole(MANAGER) {
         computeLatestProtocolFees();
         IERC20Upgradeable(staderConfig.getETHxToken()).safeTransferFrom(
             (address(this)), treasury, lastStoredProtocolFeesAmount
@@ -117,7 +120,7 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
     }
 
     /**
-     * @notice updates the ETHx exchange rate and protocol fee
+     * @notice updates the ETHx exchange rate and protocol fees
      * @dev computes the protocol fee based on the change in the value of ETHx tokens(in ETH) during an interval.
      */
     function computeLatestProtocolFees() public whenNotPaused {
@@ -136,7 +139,7 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
     }
 
     /// @notice approves ETHx token for ETHx userWithdrawalManager contract.
-    function maxApproveETHx() external {
+    function maxApproveETHx() external onlyRole(MANAGER) {
         address userWithdrawalManager = staderConfig.getUserWithdrawManager();
         if (userWithdrawalManager == address(0)) {
             revert ZeroAddress();
@@ -144,11 +147,38 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
         ERC20Upgradeable(staderConfig.getETHxToken()).approve(userWithdrawalManager, type(uint256).max);
     }
 
+    function updateProtocolFee(uint256 _protocolFeeBIPS) external onlyRole(MANAGER) {
+        if (_protocolFeeBIPS > MAX_PROTOCOL_FEE_BIPS) {
+            revert InvalidInput();
+        }
+        protocolFeeBIPS = _protocolFeeBIPS;
+        emit UpdatedProtocolFee(protocolFeeBIPS);
+    }
+
+    function updateTreasuryAddress(address _treasury) external onlyNonZeroAddress(_treasury) onlyRole(MANAGER) {
+        treasury = _treasury;
+        emit UpdatedTreasuryAddress(treasury);
+    }
+
+    function updateHsETHToken(address _hsETH) external onlyNonZeroAddress(_hsETH) onlyRole(DEFAULT_ADMIN_ROLE) {
+        hsETH = HSETH(_hsETH);
+        emit UpdatedHsETHTokenAddress(_hsETH);
+    }
+
+    function updateStaderConfig(address _staderConfig)
+        external
+        onlyNonZeroAddress(_staderConfig)
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        staderConfig = IStaderConfig(_staderConfig);
+        emit StaderConfigAddressUpdated(_staderConfig);
+    }
+
     /**
      * @dev Triggers stopped state.
      * Contract must not be paused.
      */
-    function pause() external onlyRole(PAUSER_ROLE) {
+    function pause() external onlyRole(MANAGER) {
         _pause();
     }
 
