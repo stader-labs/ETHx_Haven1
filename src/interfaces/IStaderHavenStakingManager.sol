@@ -11,7 +11,7 @@ interface IStaderHavenStakingManager {
 
     event UpdatedTreasuryAddress(address treasury);
 
-    event UpdatedProtocolFee(uint256 protocolFeeBIPS);
+    event UpdatedFeeInBPS(uint256 protocolFeeBIPS);
 
     event StaderConfigAddressUpdated(address staderConfig);
 

@@ -24,16 +24,16 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
     bytes32 public constant MANAGER = keccak256("MANAGER");
 
     uint256 public constant DECIMAL = 1e18;
-    ///@notice total fee in BIPS.
-    uint256 public constant totalFee = 10_000;
-    ///@notice maximum protocol fee value
-    uint256 public constant MAX_PROTOCOL_FEE_BIPS = 1500;
+    ///@notice total value of BPS.
+    uint256 public constant totalBPS = 10_000;
+    ///@notice maximum protocol fee value in BPS
+    uint256 public constant MAX_FEE_IN_BPS = 1500;
     ///@notice last stored exchange rate of ETHx token.
     uint256 public lastStoredETHxER;
     ///@notice last stored amount of protocol fees in ETHx token.
     uint256 public lastStoredProtocolFeesAmount;
-    ///@notice protocol fee in BIPS.
-    uint256 public protocolFeeBIPS;
+    ///@notice protocol fee in BPS.
+    uint256 public feeInBPS;
     ///@notice Haven1 protocol treasury address for rewards.
     address public treasury;
     ///@notice address of ETHx's config contract.
@@ -61,7 +61,7 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
     {
         __Pausable_init();
         __AccessControl_init();
-        protocolFeeBIPS = 0; //TODO set a value
+        feeInBPS = 0; //TODO set a value
         treasury = _treasury;
         hsETH = HSETH(_hsETH);
         staderConfig = IStaderConfig(_staderConfig);
@@ -107,7 +107,7 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
     }
 
     /**
-     * @notice transfers protocol reward to the treasury.
+     * @notice transfers accrued protocol fees to the treasury.
      * @dev protocol fees is stored in ETHx token amount.
      */
     function withdrawProtocolFees() external onlyRole(MANAGER) {
@@ -133,7 +133,7 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
             increaseInETHxER
                 * (ERC20Upgradeable(staderConfig.getETHxToken()).balanceOf(address(this)) - lastStoredProtocolFeesAmount)
         ) / DECIMAL;
-        lastStoredProtocolFeesAmount += (rewardsInETH * protocolFeeBIPS * DECIMAL) / (totalFee * currentETHxER);
+        lastStoredProtocolFeesAmount += (rewardsInETH * feeInBPS * DECIMAL) / (totalBPS * currentETHxER);
         lastStoredETHxER = currentETHxER;
         emit UpdatedLastStoredProtocolFeesAmount(lastStoredETHxER, lastStoredProtocolFeesAmount);
     }
@@ -147,12 +147,12 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
         ERC20Upgradeable(staderConfig.getETHxToken()).approve(userWithdrawalManager, type(uint256).max);
     }
 
-    function updateProtocolFee(uint256 _protocolFeeBIPS) external onlyRole(MANAGER) {
-        if (_protocolFeeBIPS > MAX_PROTOCOL_FEE_BIPS) {
+    function updateFeeInBPS(uint256 _feeIbBPS) external onlyRole(MANAGER) {
+        if (_feeIbBPS > MAX_FEE_IN_BPS) {
             revert InvalidInput();
         }
-        protocolFeeBIPS = _protocolFeeBIPS;
-        emit UpdatedProtocolFee(protocolFeeBIPS);
+        feeInBPS = _feeIbBPS;
+        emit UpdatedFeeInBPS(feeInBPS);
     }
 
     function updateTreasuryAddress(address _treasury) external onlyNonZeroAddress(_treasury) onlyRole(MANAGER) {
@@ -213,7 +213,7 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
                 * (ERC20Upgradeable(staderConfig.getETHxToken()).balanceOf(address(this)) - lastStoredProtocolFeesAmount)
         ) / DECIMAL;
         uint256 latestProtocolFeeAmount =
-            lastStoredProtocolFeesAmount + (rewardsInETH * protocolFeeBIPS * DECIMAL) / (totalFee * currentETHxER);
+            lastStoredProtocolFeesAmount + (rewardsInETH * feeInBPS * DECIMAL) / (totalBPS * currentETHxER);
 
         uint256 hsETHTotalSupply = hsETH.totalSupply();
         uint256 ethXBalance =
