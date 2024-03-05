@@ -61,7 +61,7 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
     {
         __Pausable_init();
         __AccessControl_init();
-        feeInBPS = 0; //TODO set a value
+        feeInBPS = 1000; //10 % fee
         treasury = _treasury;
         hsETH = HSETH(_hsETH);
         staderConfig = IStaderConfig(_staderConfig);
@@ -86,7 +86,7 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
     }
 
     /**
-     * @notice request withdraw by transferring hsETH to get back ETH
+     * @notice request withdraw by transferring hsETH to get back ETH.
      * @dev interacts with ETHx contracts to create withdraw request by transferring ETHx token.
      * @param _hsETH amount of hsETH token to burn.
      */
@@ -112,23 +112,21 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
      */
     function withdrawProtocolFees() external onlyRole(MANAGER) {
         computeLatestProtocolFees();
-        IERC20Upgradeable(staderConfig.getETHxToken()).safeTransferFrom(
-            (address(this)), treasury, lastStoredProtocolFeesAmount
-        );
+        IERC20Upgradeable(staderConfig.getETHxToken()).transfer(treasury, lastStoredProtocolFeesAmount);
         emit WithdrawnProtocolFees(treasury, lastStoredProtocolFeesAmount);
         lastStoredProtocolFeesAmount = 0;
     }
 
     /**
-     * @notice updates the ETHx exchange rate and protocol fees
+     * @notice updates the ETHx exchange rate and protocol fees.
      * @dev computes the protocol fee based on the change in the value of ETHx tokens(in ETH) during an interval.
      */
     function computeLatestProtocolFees() public whenNotPaused {
         uint256 currentETHxER = IStaderStakePoolManager(staderConfig.getStakePoolManager()).getExchangeRate();
-        if (currentETHxER == lastStoredETHxER) {
+        (, uint256 increaseInETHxER) = SafeMath.trySub(currentETHxER, lastStoredETHxER);
+        if (increaseInETHxER == 0) {
             return;
         }
-        (, uint256 increaseInETHxER) = SafeMath.trySub(currentETHxER, lastStoredETHxER);
         uint256 rewardsInETH = (
             increaseInETHxER
                 * (ERC20Upgradeable(staderConfig.getETHxToken()).balanceOf(address(this)) - lastStoredProtocolFeesAmount)
@@ -147,6 +145,11 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
         ERC20Upgradeable(staderConfig.getETHxToken()).approve(userWithdrawalManager, type(uint256).max);
     }
 
+    /**
+     * @notice updates the fees in BPS.
+     * @dev only MANAGER role can call.
+     * @param _feeIbBPS new value of fee in BPS.
+     */
     function updateFeeInBPS(uint256 _feeIbBPS) external onlyRole(MANAGER) {
         if (_feeIbBPS > MAX_FEE_IN_BPS) {
             revert InvalidInput();
@@ -155,16 +158,31 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
         emit UpdatedFeeInBPS(feeInBPS);
     }
 
+    /**
+     * @notice updates the address of treasury.
+     * @dev only MANAGER role can call.
+     * @param _treasury new address of treasury.
+     */
     function updateTreasuryAddress(address _treasury) external onlyNonZeroAddress(_treasury) onlyRole(MANAGER) {
         treasury = _treasury;
         emit UpdatedTreasuryAddress(treasury);
     }
 
+    /**
+     * @notice updates the address of hsETH token.
+     * @dev only ADMIN role can call.
+     * @param _hsETH new address of hsETH token.
+     */
     function updateHsETHToken(address _hsETH) external onlyNonZeroAddress(_hsETH) onlyRole(DEFAULT_ADMIN_ROLE) {
         hsETH = HSETH(_hsETH);
         emit UpdatedHsETHTokenAddress(_hsETH);
     }
 
+    /**
+     * @notice updates the address of staderConfig contract.
+     * @dev only ADMIN role can call.
+     * @param _staderConfig new address of staderConfig.
+     */
     function updateStaderConfig(address _staderConfig)
         external
         onlyNonZeroAddress(_staderConfig)
@@ -203,7 +221,7 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
         return newExchangeRate;
     }
 
-    ///@notice function to retrieve the latest exchange rate of hsETH / ETH
+    ///@notice function to retrieve the latest exchange rate of hsETH / ETH.
     function getLatestHsETHExchangeRate() external view returns (uint256) {
         uint256 currentETHxER = IStaderStakePoolManager(staderConfig.getStakePoolManager()).getExchangeRate();
 
@@ -223,7 +241,7 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
         return (latestHsETHToETHxER * currentETHxER) / DECIMAL;
     }
 
-    /// @notice non-zero address modifier
+    /// @notice non-zero address modifier.
     modifier onlyNonZeroAddress(address _addr) {
         if (_addr == address(0)) {
             revert ZeroAddress();
