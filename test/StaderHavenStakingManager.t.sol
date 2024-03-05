@@ -90,8 +90,8 @@ contract StaderHavenStakingManagerTest is Test {
         assertEq(staderHavenStakingManager.hasRole(staderHavenStakingManager.MANAGER(), manager), true);
     }
 
-    //starting with ETHx/ETH ER as 1:1, will increase it to see the impact on hsETH to ETH ER (should be less than
-    // latest ETHx ER)
+    //Starting with ETHx/ETH ER as 1:1, will increase it to see the impact on hsETH to ETH ER (should be less than
+    // latest ETHx ER).
     function test_depositWithZeroInitialSupplyOfETHx(uint64 randomSeed, uint64 amount) external {
         vm.assume(randomSeed > 0);
         vm.assume(amount > 0.1 ether && amount < 100 ether);
