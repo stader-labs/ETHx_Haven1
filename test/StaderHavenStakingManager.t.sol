@@ -81,7 +81,10 @@ contract StaderHavenStakingManagerTest is Test {
         assertEq(staderHavenStakingManager.DECIMAL(), 1e18);
         assertEq(staderHavenStakingManager.totalBPS(), 10_000);
         assertEq(staderHavenStakingManager.MAX_FEE_IN_BPS(), 1500);
-        assertEq(staderHavenStakingManager.lastStoredETHxER(), 0);
+        assertEq(
+            staderHavenStakingManager.lastStoredETHxER(),
+            StaderStakePoolManagerMock(payable(staderStakePoolManager)).getExchangeRate()
+        );
         assertEq(staderHavenStakingManager.lastStoredProtocolFeesAmount(), 0);
         assertEq(staderHavenStakingManager.treasury(), treasury);
         assertEq(address(staderHavenStakingManager.hsETH()), address(hsETH));
@@ -103,7 +106,7 @@ contract StaderHavenStakingManagerTest is Test {
 
         //depositing less than min and more than max deposit limit
         vm.prank(user);
-        vm.expectRevert(IStaderHavenStakingManager.InvalidDepositAmount.selector);
+        vm.expectRevert(StaderStakePoolManagerMock.InvalidDepositAmount.selector);
         staderHavenStakingManager.deposit{ value: 1 }();
 
         vm.prank(manager);
@@ -181,8 +184,6 @@ contract StaderHavenStakingManagerTest is Test {
         staderHavenStakingManager.unpause();
 
         vm.startPrank(user);
-        vm.expectRevert(IStaderHavenStakingManager.InvalidWithdrawAmount.selector);
-        staderHavenStakingManager.requestWithdraw(1);
         staderHavenStakingManager.requestWithdraw(userHsETHHolding);
         vm.stopPrank();
 

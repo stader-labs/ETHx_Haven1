@@ -65,6 +65,7 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
         treasury = _treasury;
         hsETH = HSETH(_hsETH);
         staderConfig = IStaderConfig(_staderConfig);
+        lastStoredETHxER = IStaderStakePoolManager(staderConfig.getStakePoolManager()).getExchangeRate();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
 
@@ -72,11 +73,8 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
      * @notice deposit ETH to receive hsETH.
      * @dev interacts with ETHx contract to mint ETHx token and then hsETH based on hsETH to ETHx ER.
      */
-    function deposit() external payable {
+    function deposit() public payable {
         IStaderStakePoolManager staderStakePoolManager = IStaderStakePoolManager(staderConfig.getStakePoolManager());
-        if (msg.value > staderStakePoolManager.maxDeposit() || msg.value < staderStakePoolManager.minDeposit()) {
-            revert InvalidDepositAmount();
-        }
         computeLatestProtocolFees();
         uint256 currentHsETHToEThxER = getLastStoredHsETHToETHxRate();
         uint256 ethXShares = staderStakePoolManager.deposit{ value: msg.value }(address(this), "Haven1");
@@ -94,10 +92,7 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
         computeLatestProtocolFees();
         uint256 currentHsETHToEThxER = getLastStoredHsETHToETHxRate();
         uint256 ethXShareToBurn = (_hsETH * currentHsETHToEThxER) / DECIMAL;
-        uint256 assets = IStaderStakePoolManager(staderConfig.getStakePoolManager()).previewWithdraw(ethXShareToBurn);
-        if (assets < staderConfig.getMinWithdrawAmount() || assets > staderConfig.getMaxWithdrawAmount()) {
-            revert InvalidWithdrawAmount();
-        }
+
         hsETH.burnFrom(msg.sender, _hsETH);
         uint256 requestID = IStaderUserWithdrawManager(staderConfig.getUserWithdrawManager()).requestWithdraw(
             ethXShareToBurn, msg.sender, "Haven1"
@@ -148,13 +143,14 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
     /**
      * @notice updates the fees in BPS.
      * @dev only MANAGER role can call.
-     * @param _feeIbBPS new value of fee in BPS.
+     * @param _feeInBPS new value of fee in BPS.
      */
-    function updateFeeInBPS(uint256 _feeIbBPS) external onlyRole(MANAGER) {
-        if (_feeIbBPS > MAX_FEE_IN_BPS) {
+    function updateFeeInBPS(uint256 _feeInBPS) external onlyRole(MANAGER) {
+        if (_feeInBPS > MAX_FEE_IN_BPS) {
             revert InvalidInput();
         }
-        feeInBPS = _feeIbBPS;
+        computeLatestProtocolFees();
+        feeInBPS = _feeInBPS;
         emit UpdatedFeeInBPS(feeInBPS);
     }
 

@@ -4,6 +4,8 @@ pragma solidity 0.8.16;
 import "./ETHxMock.sol";
 
 contract StaderStakePoolManagerMock {
+    error InvalidDepositAmount();
+
     ETHxMock ethX;
     uint256 constant DECIMAL = 1e18;
 
@@ -13,16 +15,19 @@ contract StaderStakePoolManagerMock {
 
     function deposit(address _receiver, string calldata) external payable returns (uint256) {
         uint256 asset = msg.value;
+        if (msg.value > maxDeposit() || msg.value < minDeposit()) {
+            revert InvalidDepositAmount();
+        }
         uint256 shareToMint = (asset * DECIMAL) / getExchangeRateInternal(asset);
         ethX.mint(_receiver, shareToMint);
         return shareToMint;
     }
 
-    function maxDeposit() external pure returns (uint256) {
+    function maxDeposit() public pure returns (uint256) {
         return 100 ether;
     }
 
-    function minDeposit() external pure returns (uint256) {
+    function minDeposit() public pure returns (uint256) {
         return 0.1 ether;
     }
 

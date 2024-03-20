@@ -4,11 +4,5 @@ pragma solidity 0.8.16;
 interface IStaderStakePoolManager {
     function deposit(address _receiver, string calldata _referralId) external payable returns (uint256);
 
-    function maxDeposit() external view returns (uint256);
-
-    function minDeposit() external view returns (uint256);
-
-    function previewWithdraw(uint256 _shares) external view returns (uint256);
-
     function getExchangeRate() external view returns (uint256);
 }
