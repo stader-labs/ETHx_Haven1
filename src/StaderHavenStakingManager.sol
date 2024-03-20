@@ -73,7 +73,7 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
      * @notice deposit ETH to receive hsETH.
      * @dev interacts with ETHx contract to mint ETHx token and then hsETH based on hsETH to ETHx ER.
      */
-    function deposit() public payable {
+    function deposit() external payable {
         IStaderStakePoolManager staderStakePoolManager = IStaderStakePoolManager(staderConfig.getStakePoolManager());
         computeLatestProtocolFees();
         uint256 currentHsETHToEThxER = getLastStoredHsETHToETHxRate();
