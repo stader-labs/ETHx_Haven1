@@ -1,0 +1,27 @@
+{
+  "name": "ethx_haven1",
+  "version": "1.0.0",
+  "description": "**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "solhint 'contracts/**/*.sol'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stader-labs/ETHx_Haven1.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/stader-labs/ETHx_Haven1/issues"
+  },
+  "homepage": "https://github.com/stader-labs/ETHx_Haven1#readme",
+  "devDependencies": {
+    "solhint": "^4.5.4"
+  }
+}
