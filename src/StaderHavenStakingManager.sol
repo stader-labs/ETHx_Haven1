@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity 0.8.16;
 
-import "./HSETH.sol";
-import "./interfaces/IStaderConfig.sol";
-import "./interfaces/IStaderStakePoolManager.sol";
-import "./interfaces/IStaderUserWithdrawManager.sol";
-import "./interfaces/IStaderHavenStakingManager.sol";
+import { SafeMath } from "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
+import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
+import { ERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
-import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { HSETH } from "./HSETH.sol";
+import { IStaderConfig } from "./interfaces/IStaderConfig.sol";
+import { IStaderStakePoolManager } from "./interfaces/IStaderStakePoolManager.sol";
+import { IStaderUserWithdrawManager } from "./interfaces/IStaderUserWithdrawManager.sol";
+import { IStaderHavenStakingManager } from "./interfaces/IStaderHavenStakingManager.sol";
 
 /**
  * @title ETHx wrapper for Haven1
@@ -20,6 +21,9 @@ import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol"
  */
 contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlUpgradeable, PausableUpgradeable {
     using SafeERC20Upgradeable for IERC20Upgradeable;
+
+    error MinimumHsETHNotMet(uint256 minimumHsETH, uint256 hsETHToMint);
+    error MinimumETHNotMet(uint256 minimumETHxToBurn, uint256 ethXShareToBurn);
 
     bytes32 public constant MANAGER = keccak256("MANAGER");
 
@@ -70,28 +74,48 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
     }
 
     /**
-     * @notice deposit ETH to receive hsETH.
-     * @dev interacts with ETHx contract to mint ETHx token and then hsETH based on hsETH to ETHx ER.
+     * @notice deposit ETH to recieve hsETH ignoring slippage
      */
     function deposit() external payable {
+        deposit(0);
+    }
+
+    /**
+     * @notice deposit ETH to receive hsETH.
+     * @dev interacts with ETHx contract to mint ETHx token and then hsETH based on hsETH to ETHx ER.
+     * @param _minimumHsETH minimum hsETH to mint considering slippage
+     */
+    function deposit(uint256 _minimumHsETH) public payable {
         IStaderStakePoolManager staderStakePoolManager = IStaderStakePoolManager(staderConfig.getStakePoolManager());
         computeLatestProtocolFees();
         uint256 currentHsETHToEThxER = getLastStoredHsETHToETHxRate();
         uint256 ethXShares = staderStakePoolManager.deposit{ value: msg.value }(address(this), "Haven1");
         uint256 hsETHToMint = (ethXShares * DECIMAL) / currentHsETHToEThxER;
+        if (hsETHToMint < _minimumHsETH) {
+            revert MinimumHsETHNotMet(_minimumHsETH, hsETHToMint);
+        }
         hsETH.mint(msg.sender, hsETHToMint);
         emit Deposited(msg.sender, msg.value, ethXShares, hsETHToMint);
+    }
+
+    function requestWithdraw(uint256 _hsETH) external returns (uint256) {
+        return requestWithdraw(_hsETH, 0);
     }
 
     /**
      * @notice request withdraw by transferring hsETH to get back ETH.
      * @dev interacts with ETHx contracts to create withdraw request by transferring ETHx token.
      * @param _hsETH amount of hsETH token to burn.
+     * @param _minimumETHxToBurn minimum ETHx to burn considering slippage.
      */
-    function requestWithdraw(uint256 _hsETH) external returns (uint256) {
+    function requestWithdraw(uint256 _hsETH, uint256 _minimumETHxToBurn) public returns (uint256) {
         computeLatestProtocolFees();
         uint256 currentHsETHToEThxER = getLastStoredHsETHToETHxRate();
         uint256 ethXShareToBurn = (_hsETH * currentHsETHToEThxER) / DECIMAL;
+
+        if (ethXShareToBurn < _minimumETHxToBurn) {
+            revert MinimumETHNotMet(_minimumETHxToBurn, ethXShareToBurn);
+        }
 
         hsETH.burnFrom(msg.sender, _hsETH);
         uint256 requestID = IStaderUserWithdrawManager(staderConfig.getUserWithdrawManager()).requestWithdraw(

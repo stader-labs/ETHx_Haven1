@@ -1,27 +1,35 @@
+// SDPX-License-Identifier: UNLICENSED
 pragma solidity 0.8.16;
 
-import "../src/HSETH.sol";
-import "./mocks/ETHxMock.sol";
-import "./mocks/StaderConfigMock.sol";
-import "./mocks/StaderStakePoolManagerMock.sol";
-import "./mocks/StaderUserWithdrawManagerMock.sol";
-import "../src/StaderHavenStakingManager.sol";
+// solhint-disable
 
-import "forge-std/Test.sol";
-import "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
-import "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
+import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
+
+import { HSETH } from "../src/HSETH.sol";
+import { StaderHavenStakingManager } from "../src/StaderHavenStakingManager.sol";
+import { IStaderStakePoolManager } from "../src/interfaces/IStaderStakePoolManager.sol";
+import { IStaderHavenStakingManager } from "../src/interfaces/IStaderHavenStakingManager.sol";
+
+import { ETHxMock } from "./mocks/ETHxMock.sol";
+import { StaderConfigMock } from "./mocks/StaderConfigMock.sol";
+import { StaderStakePoolManagerMock } from "./mocks/StaderStakePoolManagerMock.sol";
+import { StaderUserWithdrawManagerMock } from "./mocks/StaderUserWithdrawManagerMock.sol";
+
+import { Test, console } from "forge-std/Test.sol";
 
 contract StaderHavenStakingManagerTest is Test {
     uint256 public constant DECIMAL = 1e18;
-    address admin;
-    address manager;
-    address treasury;
-    HSETH hsETH;
-    address ethX;
-    StaderConfigMock staderConfig;
-    address userWithdrawManager;
-    address staderStakePoolManager;
-    StaderHavenStakingManager staderHavenStakingManager;
+
+    address private admin;
+    address private manager;
+    address private treasury;
+    HSETH private hsETH;
+    address private ethX;
+    StaderConfigMock private staderConfig;
+    address private userWithdrawManager;
+    address private staderStakePoolManager;
+    StaderHavenStakingManager private staderHavenStakingManager;
 
     function setUp() public {
         admin = vm.addr(100);
@@ -56,7 +64,7 @@ contract StaderHavenStakingManagerTest is Test {
         vm.stopPrank();
     }
 
-    function test_initializeWithZeroAddress() external {
+    function testInitializeWithZeroAddress() external {
         ProxyAdmin proxyAdmin = new ProxyAdmin();
         StaderHavenStakingManager staderHavenStakingManager2;
 
@@ -76,7 +84,7 @@ contract StaderHavenStakingManagerTest is Test {
         staderHavenStakingManager2.initialize(admin, address(hsETH), treasury, address(0));
     }
 
-    function test_initialize() external {
+    function testInitialize() external {
         assertEq(staderHavenStakingManager.feeInBPS(), 1000);
         assertEq(staderHavenStakingManager.DECIMAL(), 1e18);
         assertEq(staderHavenStakingManager.totalBPS(), 10_000);
@@ -95,10 +103,9 @@ contract StaderHavenStakingManagerTest is Test {
 
     //Starting with ETHx/ETH ER as 1:1, will increase it to see the impact on hsETH to ETH ER (should be less than
     // latest ETHx ER).
-    function test_depositWithZeroInitialSupplyOfETHx(uint64 randomSeed, uint64 amount) external {
-        vm.assume(randomSeed > 0);
+    function testDepositWithZeroInitialSupplyOfETHx(uint64 amount) external {
         vm.assume(amount > 0.1 ether && amount < 100 ether);
-        address user = vm.addr(randomSeed);
+        address user = vm.addr(0x101);
         vm.deal(user, 5 * uint256(amount));
 
         uint256 ethXER1 = StaderStakePoolManagerMock(payable(staderStakePoolManager)).getExchangeRate();
@@ -150,13 +157,24 @@ contract StaderHavenStakingManagerTest is Test {
         );
     }
 
+    function testDepositWithMinimumTokenRequirement() external {
+        uint256 amount = 1 ether;
+        address user = vm.addr(0x101);
+        vm.deal(user, 5 * amount);
+        vm.expectRevert(
+            abi.encodeWithSelector(StaderHavenStakingManager.MinimumHsETHNotMet.selector, amount + 1 gwei, amount)
+        );
+        vm.startPrank(user);
+        staderHavenStakingManager.deposit{ value: amount }(amount + 1 gwei);
+        vm.stopPrank();
+    }
+
     //Testing unstake along with withdrawing protocol fee to check if any residue ETHx token in the contract.
     //This test verifies that there is residue ETHx token in the contract which is fine as rounding is preferring
     // protocol.
-    function test_requestWithdrawWithSingleUser(uint64 randomSeed, uint64 amount) external {
-        vm.assume(randomSeed > 0);
+    function testRequestWithdrawWithSingleUser(uint64 amount) external {
         vm.assume(amount > 0.1 ether && amount < 100 ether);
-        address user = vm.addr(randomSeed);
+        address user = vm.addr(0x101);
         vm.deal(user, 5 * uint256(amount));
 
         vm.startPrank(user);
@@ -201,11 +219,36 @@ contract StaderHavenStakingManagerTest is Test {
         assertEq(staderHavenStakingManager.lastStoredProtocolFeesAmount(), 0);
     }
 
+    function testRequestWithdrawWithRequiredMinimum() external {
+        uint256 amount = 1 ether;
+        address user = vm.addr(0x101);
+        vm.deal(user, 5 * uint256(amount));
+
+        vm.startPrank(user);
+        assertEq(ETHxMock(ethX).balanceOf(address(staderHavenStakingManager)), 0);
+        staderHavenStakingManager.deposit{ value: amount }();
+        //send ether to increase the ETHx ER
+        payable(staderStakePoolManager).call{ value: 2 * uint256(amount) }("");
+        staderHavenStakingManager.deposit{ value: amount }();
+
+        uint256 userHsETHHolding = hsETH.balanceOf(user);
+        vm.startPrank(user);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                StaderHavenStakingManager.MinimumETHNotMet.selector,
+                userHsETHHolding + 1 gwei,
+                1_266_666_666_666_666_666
+            )
+        );
+        staderHavenStakingManager.requestWithdraw(userHsETHHolding, userHsETHHolding + 1 gwei);
+        vm.stopPrank();
+    }
+
     //Testing withdraw along with withdrawing protocol fee to check if any residue ETHx token in the contract with
     // multiple users.
     //This test verifies that there is residue ETHx token in the contract which is fine as rounding is preferring
     // protocol.
-    function test_requestWithdrawWithTwoUsers(uint64 randomSeed1, uint64 randomSeed2, uint64 amount) external {
+    function testRequestWithdrawWithTwoUsers(uint64 randomSeed1, uint64 randomSeed2, uint64 amount) external {
         vm.assume(randomSeed1 > 0 && randomSeed2 > 0 && randomSeed1 != randomSeed2);
         vm.assume(amount > 0.1 ether && amount < 100 ether);
         address user = vm.addr(randomSeed1);
@@ -244,7 +287,7 @@ contract StaderHavenStakingManagerTest is Test {
         assertEq(staderHavenStakingManager.lastStoredProtocolFeesAmount(), 0);
     }
 
-    function test_maxApprovingEThxWithUserWithdrawManagerAsZeroAddr() external {
+    function testMaxApprovingEThxWithUserWithdrawManagerAsZeroAddr() external {
         vm.mockCall(
             address(staderConfig),
             abi.encodeWithSelector(StaderConfigMock.getUserWithdrawManager.selector),
@@ -257,7 +300,7 @@ contract StaderHavenStakingManagerTest is Test {
         staderHavenStakingManager.maxApproveETHx();
     }
 
-    function test_updateFeeInBPS(uint64 input1, uint64 input2) external {
+    function testUpdateFeeInBPS(uint64 input1, uint64 input2) external {
         vm.assume(input1 <= staderHavenStakingManager.MAX_FEE_IN_BPS());
         vm.assume(input2 > staderHavenStakingManager.MAX_FEE_IN_BPS());
 
@@ -270,7 +313,7 @@ contract StaderHavenStakingManagerTest is Test {
         assertEq(staderHavenStakingManager.feeInBPS(), input1);
     }
 
-    function test_updateTreasuryAddress(uint64 randomSeed) external {
+    function testUpdateTreasuryAddress(uint64 randomSeed) external {
         vm.assume(randomSeed > 0);
         address treasuryAddr = vm.addr(randomSeed);
 
@@ -283,7 +326,7 @@ contract StaderHavenStakingManagerTest is Test {
         assertEq(staderHavenStakingManager.treasury(), treasuryAddr);
     }
 
-    function test_updateHsETHToken(uint64 randomSeed) external {
+    function testUpdateHsETHToken(uint64 randomSeed) external {
         vm.assume(randomSeed > 0);
         address hsETHTokenAddr = vm.addr(randomSeed);
 
@@ -296,7 +339,7 @@ contract StaderHavenStakingManagerTest is Test {
         assertEq(address(staderHavenStakingManager.hsETH()), hsETHTokenAddr);
     }
 
-    function test_updateStaderConfig(uint64 randomSeed) external {
+    function testUpdateStaderConfig(uint64 randomSeed) external {
         vm.assume(randomSeed > 0);
         address staderConfigAddr = vm.addr(randomSeed);
 
