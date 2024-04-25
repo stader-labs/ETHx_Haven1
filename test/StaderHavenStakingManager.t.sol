@@ -8,8 +8,8 @@ import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin
 
 import { HSETH } from "../src/HSETH.sol";
 import { StaderHavenStakingManager } from "../src/StaderHavenStakingManager.sol";
-import { IStaderStakePoolManager } from "../src/interfaces/IStaderStakePoolManager.sol";
 import { IStaderHavenStakingManager } from "../src/interfaces/IStaderHavenStakingManager.sol";
+import { IStaderStakePoolManager } from "../src/interfaces/IStaderStakePoolManager.sol";
 
 import { ETHxMock } from "./mocks/ETHxMock.sol";
 import { StaderConfigMock } from "./mocks/StaderConfigMock.sol";
@@ -20,6 +20,8 @@ import { Test, console } from "forge-std/Test.sol";
 
 contract StaderHavenStakingManagerTest is Test {
     uint256 public constant DECIMAL = 1e18;
+
+    event WithdrawnProtocolFees(address treasury, uint256 protocolFeesAmount);
 
     address private admin;
     address private manager;
@@ -162,7 +164,7 @@ contract StaderHavenStakingManagerTest is Test {
         address user = vm.addr(0x101);
         vm.deal(user, 5 * amount);
         vm.expectRevert(
-            abi.encodeWithSelector(StaderHavenStakingManager.MinimumHsETHNotMet.selector, amount + 1 gwei, amount)
+            abi.encodeWithSelector(IStaderHavenStakingManager.MinimumHsETHNotMet.selector, amount + 1 gwei, amount)
         );
         vm.startPrank(user);
         staderHavenStakingManager.deposit{ value: amount }(amount + 1 gwei);
@@ -189,21 +191,11 @@ contract StaderHavenStakingManagerTest is Test {
         staderHavenStakingManager.requestWithdraw(userHsETHHolding);
         vm.stopPrank();
 
-        vm.startPrank(manager);
-        staderHavenStakingManager.maxApproveETHx();
-        staderHavenStakingManager.pause();
-        vm.stopPrank();
+        vm.prank(manager);
+        staderHavenStakingManager.approveETHxWithdraw(userHsETHHolding);
 
         vm.prank(user);
-        vm.expectRevert("Pausable: paused");
         staderHavenStakingManager.requestWithdraw(userHsETHHolding);
-
-        vm.prank(admin);
-        staderHavenStakingManager.unpause();
-
-        vm.startPrank(user);
-        staderHavenStakingManager.requestWithdraw(userHsETHHolding);
-        vm.stopPrank();
 
         uint256 protocolFee = staderHavenStakingManager.lastStoredProtocolFeesAmount();
         vm.prank(manager);
@@ -217,6 +209,89 @@ contract StaderHavenStakingManagerTest is Test {
         payable(staderStakePoolManager).call{ value: 100 * uint256(amount) }("");
         staderHavenStakingManager.computeLatestProtocolFees();
         assertEq(staderHavenStakingManager.lastStoredProtocolFeesAmount(), 0);
+    }
+
+    function testRequestWithdrawWhenPaused() external {
+        uint256 amount = 1 ether;
+        address user = vm.addr(0x101);
+        vm.deal(user, 5 * uint256(amount));
+
+        vm.startPrank(user);
+        assertEq(ETHxMock(ethX).balanceOf(address(staderHavenStakingManager)), 0);
+        staderHavenStakingManager.deposit{ value: amount }();
+        //send ether to increase the ETHx ER
+        payable(staderStakePoolManager).call{ value: 2 * uint256(amount) }("");
+        staderHavenStakingManager.deposit{ value: amount }();
+
+        uint256 userHsETHHolding = hsETH.balanceOf(user);
+        vm.stopPrank();
+
+        vm.startPrank(manager);
+        staderHavenStakingManager.approveETHxWithdraw(userHsETHHolding);
+        staderHavenStakingManager.pause();
+        vm.stopPrank();
+
+        vm.prank(user);
+        vm.expectRevert("Pausable: paused");
+        staderHavenStakingManager.requestWithdraw(userHsETHHolding);
+    }
+
+    function testDepositWhenPaused() external {
+        uint256 amount = 1 ether;
+        address user = vm.addr(0x101);
+        vm.deal(user, 5 * uint256(amount));
+
+        vm.prank(manager);
+        staderHavenStakingManager.pause();
+        vm.prank(user);
+        vm.expectRevert("Pausable: paused");
+        staderHavenStakingManager.deposit{ value: amount }();
+    }
+
+    function testRequestWithdrawProtocolFeeEvent(uint64 amount) external {
+        vm.assume(amount > 0.1 ether && amount < 100 ether);
+        address user = vm.addr(0x101);
+        vm.deal(user, 5 * uint256(amount));
+
+        vm.startPrank(user);
+        assertEq(ETHxMock(ethX).balanceOf(address(staderHavenStakingManager)), 0);
+        staderHavenStakingManager.deposit{ value: amount }();
+        //send ether to increase the ETHx ER
+        payable(staderStakePoolManager).call{ value: 2 * uint256(amount) }("");
+        staderHavenStakingManager.deposit{ value: amount }();
+        vm.stopPrank();
+
+        uint256 userHsETHHolding = hsETH.balanceOf(user);
+
+        vm.prank(manager);
+        staderHavenStakingManager.approveETHxWithdraw(userHsETHHolding);
+        vm.prank(user);
+        staderHavenStakingManager.requestWithdraw(userHsETHHolding);
+        uint256 protocolFee = staderHavenStakingManager.lastStoredProtocolFeesAmount();
+
+        vm.expectEmit();
+        emit WithdrawnProtocolFees(treasury, protocolFee);
+        vm.prank(manager);
+        staderHavenStakingManager.withdrawProtocolFees();
+    }
+
+    function testRequestWithdrawProtocolFeeWhenPaused() external {
+        uint256 amount = 1 ether;
+        address user = vm.addr(0x101);
+        vm.deal(user, 5 * uint256(amount));
+
+        vm.startPrank(user);
+        assertEq(ETHxMock(ethX).balanceOf(address(staderHavenStakingManager)), 0);
+        staderHavenStakingManager.deposit{ value: amount }();
+        //send ether to increase the ETHx ER
+        payable(staderStakePoolManager).call{ value: 2 * uint256(amount) }("");
+        staderHavenStakingManager.deposit{ value: amount }();
+        vm.stopPrank();
+        vm.startPrank(manager);
+        staderHavenStakingManager.pause();
+        vm.expectRevert("Pausable: paused");
+        staderHavenStakingManager.withdrawProtocolFees();
+        vm.stopPrank();
     }
 
     function testRequestWithdrawWithRequiredMinimum() external {
@@ -235,7 +310,7 @@ contract StaderHavenStakingManagerTest is Test {
         vm.startPrank(user);
         vm.expectRevert(
             abi.encodeWithSelector(
-                StaderHavenStakingManager.MinimumETHNotMet.selector,
+                IStaderHavenStakingManager.MinimumETHNotMet.selector,
                 userHsETHHolding + 1 gwei,
                 1_266_666_666_666_666_666
             )
@@ -271,7 +346,7 @@ contract StaderHavenStakingManagerTest is Test {
 
         vm.stopPrank();
         vm.prank(manager);
-        staderHavenStakingManager.maxApproveETHx();
+        staderHavenStakingManager.approveETHxWithdraw(user1HsETHHolding + user2HsETHHolding);
         vm.prank(user);
         staderHavenStakingManager.requestWithdraw(user1HsETHHolding);
         vm.prank(user2);
@@ -294,10 +369,10 @@ contract StaderHavenStakingManagerTest is Test {
             abi.encode(address(0))
         );
         vm.expectRevert();
-        staderHavenStakingManager.maxApproveETHx();
+        staderHavenStakingManager.approveETHxWithdraw(1 ether);
         vm.prank(manager);
         vm.expectRevert(IStaderHavenStakingManager.ZeroAddress.selector);
-        staderHavenStakingManager.maxApproveETHx();
+        staderHavenStakingManager.approveETHxWithdraw(1 ether);
     }
 
     function testUpdateFeeInBPS(uint64 input1, uint64 input2) external {
@@ -311,6 +386,15 @@ contract StaderHavenStakingManagerTest is Test {
         staderHavenStakingManager.updateFeeInBPS(input2);
         staderHavenStakingManager.updateFeeInBPS(input1);
         assertEq(staderHavenStakingManager.feeInBPS(), input1);
+    }
+
+    function testUpdateFeeInBPSWhenPaused() external {
+        uint256 input1 = staderHavenStakingManager.MAX_FEE_IN_BPS() - 1;
+        vm.startPrank(manager);
+        staderHavenStakingManager.pause();
+        vm.expectRevert("Pausable: paused");
+        staderHavenStakingManager.updateFeeInBPS(input1);
+        vm.stopPrank();
     }
 
     function testUpdateTreasuryAddress(uint64 randomSeed) external {

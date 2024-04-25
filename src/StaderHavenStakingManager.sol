@@ -22,9 +22,6 @@ import { IStaderHavenStakingManager } from "./interfaces/IStaderHavenStakingMana
 contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlUpgradeable, PausableUpgradeable {
     using SafeERC20Upgradeable for IERC20Upgradeable;
 
-    error MinimumHsETHNotMet(uint256 minimumHsETH, uint256 hsETHToMint);
-    error MinimumETHNotMet(uint256 minimumETHxToBurn, uint256 ethXShareToBurn);
-
     bytes32 public constant MANAGER = keccak256("MANAGER");
 
     uint256 public constant DECIMAL = 1e18;
@@ -131,9 +128,10 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
      */
     function withdrawProtocolFees() external onlyRole(MANAGER) {
         computeLatestProtocolFees();
-        IERC20Upgradeable(staderConfig.getETHxToken()).transfer(treasury, lastStoredProtocolFeesAmount);
-        emit WithdrawnProtocolFees(treasury, lastStoredProtocolFeesAmount);
+        uint256 feeAmountToTransfer = lastStoredProtocolFeesAmount;
         lastStoredProtocolFeesAmount = 0;
+        IERC20Upgradeable(staderConfig.getETHxToken()).transfer(treasury, feeAmountToTransfer);
+        emit WithdrawnProtocolFees(treasury, feeAmountToTransfer);
     }
 
     /**
@@ -155,13 +153,16 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
         emit UpdatedLastStoredProtocolFeesAmount(lastStoredETHxER, lastStoredProtocolFeesAmount);
     }
 
-    /// @notice approves ETHx token for ETHx userWithdrawalManager contract.
-    function maxApproveETHx() external onlyRole(MANAGER) {
+    /**
+     * @notice approves ETHx token for ETHx userWithdrawalManager contract.
+     * @param _maxAmount maximum amount to approve
+     */
+    function approveETHxWithdraw(uint256 _maxAmount) external onlyRole(MANAGER) {
         address userWithdrawalManager = staderConfig.getUserWithdrawManager();
         if (userWithdrawalManager == address(0)) {
             revert ZeroAddress();
         }
-        ERC20Upgradeable(staderConfig.getETHxToken()).approve(userWithdrawalManager, type(uint256).max);
+        ERC20Upgradeable(staderConfig.getETHxToken()).approve(userWithdrawalManager, _maxAmount);
     }
 
     /**

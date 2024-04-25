@@ -4,6 +4,8 @@ pragma solidity 0.8.16;
 interface IStaderHavenStakingManager {
     error ZeroAddress();
     error InvalidInput();
+    error MinimumHsETHNotMet(uint256 minimumHsETH, uint256 hsETHToMint);
+    error MinimumETHNotMet(uint256 minimumETHxToBurn, uint256 ethXShareToBurn);
 
     event UpdatedHsETHTokenAddress(address hsETH);
 
