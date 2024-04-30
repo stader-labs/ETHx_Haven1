@@ -5,7 +5,7 @@ interface IStaderHavenStakingManager {
     error ZeroAddress();
     error InvalidInput();
     error MinimumHsETHNotMet(uint256 minimumHsETH, uint256 hsETHToMint);
-    error MinimumETHNotMet(uint256 minimumETHxToBurn, uint256 ethXShareToBurn);
+    error MaximumETHxExceeded(uint256 maximumETHx, uint256 ethXShare);
 
     event UpdatedHsETHTokenAddress(address hsETH);
 

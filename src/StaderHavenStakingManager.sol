@@ -96,22 +96,22 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
     }
 
     function requestWithdraw(uint256 _hsETH) external returns (uint256) {
-        return requestWithdraw(_hsETH, 0);
+        return requestWithdraw(_hsETH, type(uint256).max);
     }
 
     /**
      * @notice request withdraw by transferring hsETH to get back ETH.
      * @dev interacts with ETHx contracts to create withdraw request by transferring ETHx token.
      * @param _hsETH amount of hsETH token to burn.
-     * @param _minimumETHxToBurn minimum ETHx to burn considering slippage.
+     * @param _maximumETHxToBurn maximum ETHx to burn considering slippage.
      */
-    function requestWithdraw(uint256 _hsETH, uint256 _minimumETHxToBurn) public returns (uint256) {
+    function requestWithdraw(uint256 _hsETH, uint256 _maximumETHxToBurn) public returns (uint256) {
         computeLatestProtocolFees();
         uint256 currentHsETHToEThxER = getLastStoredHsETHToETHxRate();
         uint256 ethXShareToBurn = (_hsETH * currentHsETHToEThxER) / DECIMAL;
 
-        if (ethXShareToBurn < _minimumETHxToBurn) {
-            revert MinimumETHNotMet(_minimumETHxToBurn, ethXShareToBurn);
+        if (ethXShareToBurn > _maximumETHxToBurn) {
+            revert MaximumETHxExceeded(_maximumETHxToBurn, ethXShareToBurn);
         }
 
         hsETH.burnFrom(msg.sender, _hsETH);
@@ -130,7 +130,9 @@ contract StaderHavenStakingManager is IStaderHavenStakingManager, AccessControlU
         computeLatestProtocolFees();
         uint256 feeAmountToTransfer = lastStoredProtocolFeesAmount;
         lastStoredProtocolFeesAmount = 0;
-        IERC20Upgradeable(staderConfig.getETHxToken()).transfer(treasury, feeAmountToTransfer);
+        address ethxToken = staderConfig.getETHxToken();
+        IERC20Upgradeable ethx = IERC20Upgradeable(ethxToken);
+        ethx.safeTransfer(treasury, feeAmountToTransfer);
         emit WithdrawnProtocolFees(treasury, feeAmountToTransfer);
     }
 

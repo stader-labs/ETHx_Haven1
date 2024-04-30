@@ -294,7 +294,7 @@ contract StaderHavenStakingManagerTest is Test {
         vm.stopPrank();
     }
 
-    function testRequestWithdrawWithRequiredMinimum() external {
+    function testRequestWithdrawWithRequiredMaximum() external {
         uint256 amount = 1 ether;
         address user = vm.addr(0x101);
         vm.deal(user, 5 * uint256(amount));
@@ -305,18 +305,22 @@ contract StaderHavenStakingManagerTest is Test {
         //send ether to increase the ETHx ER
         payable(staderStakePoolManager).call{ value: 2 * uint256(amount) }("");
         staderHavenStakingManager.deposit{ value: amount }();
+        vm.stopPrank();
 
         uint256 userHsETHHolding = hsETH.balanceOf(user);
-        vm.startPrank(user);
+
+        vm.prank(manager);
+        staderHavenStakingManager.approveETHxWithdraw(userHsETHHolding);
+
         vm.expectRevert(
             abi.encodeWithSelector(
-                IStaderHavenStakingManager.MinimumETHNotMet.selector,
-                userHsETHHolding + 1 gwei,
+                IStaderHavenStakingManager.MaximumETHxExceeded.selector,
+                678_571_428_571_428_571,
                 1_266_666_666_666_666_666
             )
         );
-        staderHavenStakingManager.requestWithdraw(userHsETHHolding, userHsETHHolding + 1 gwei);
-        vm.stopPrank();
+        vm.prank(user);
+        staderHavenStakingManager.requestWithdraw(userHsETHHolding, userHsETHHolding / 2);
     }
 
     //Testing withdraw along with withdrawing protocol fee to check if any residue ETHx token in the contract with
