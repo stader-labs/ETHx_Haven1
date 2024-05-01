@@ -114,6 +114,93 @@
                 "kind": "test",
                 "isDefault": false
             }
-        }
+        },
+        {
+            "label": "deployproxyadmin",
+            "type": "shell",
+            "command": "forge script ./script/HSETH.s.sol:DeployHSETH --sig 'deployAdmin()' --broadcast --slow --rpc-url ${HOLESKY_URL} --private-key ${PRIVATE_KEY} --etherscan-api-key ${ETHERSCAN_API_KEY} --verify",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "HSETH_ADMIN": "0x2E1F5C7f87096fb7FfFbB6654Fc3b2CE303aEff5",
+                }
+            },
+            "dependsOn": "test",
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "deployhseth",
+            "type": "shell",
+            "command": "forge script ./script/HSETH.s.sol:DeployHSETH --sig 'proxyDeploy()' --broadcast --slow --rpc-url ${HOLESKY_URL} --private-key ${PRIVATE_KEY} --etherscan-api-key ${ETHERSCAN_API_KEY} --verify",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "HSETH_ADMIN": "0x2E1F5C7f87096fb7FfFbB6654Fc3b2CE303aEff5",
+                    "PROXY_ADMIN": "0x6904603c27392310D19E389105CA792FB935C43C",
+                }
+            },
+            "dependsOn": "test",
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "upgradehseth",
+            "type": "shell",
+            "command": "forge script ./script/HSETH.s.sol:DeployHSETH --sig 'proxyUpgrade()' --broadcast --slow --rpc-url ${HOLESKY_URL} --private-key ${PRIVATE_KEY} --etherscan-api-key ${ETHERSCAN_API_KEY} --verify",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "PROXY_ADMIN": "0x6904603c27392310D19E389105CA792FB935C43C",
+                    "PROXY_ADDRESS": "0x217EBabCf15EC6deaCF11f737d79275e95C97EFE",
+                }
+            },
+            "dependsOn": "test",
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "deploystakingmanager",
+            "type": "shell",
+            "command": "forge script ./script/StaderHavenStakingManager.s.sol:DeployStakingManager --sig 'proxyDeploy()' --broadcast --slow --rpc-url ${HOLESKY_URL} --private-key ${PRIVATE_KEY} --etherscan-api-key ${ETHERSCAN_API_KEY} --verify",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "HSETH_ADMIN": "0x2E1F5C7f87096fb7FfFbB6654Fc3b2CE303aEff5",
+                    "PROXY_ADMIN": "0x6904603c27392310D19E389105CA792FB935C43C",
+                    "HSETH": "0x217EBabCf15EC6deaCF11f737d79275e95C97EFE",
+                    "TREASURY": "0x2E1F5C7f87096fb7FfFbB6654Fc3b2CE303aEff5",
+                    "STADER_CONFIG": "0x50FD3384783EE49011E7b57d7A3430a762b3f3F2"
+                }
+            },
+            "dependsOn": "test",
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "upgradestakingmanager",
+            "type": "shell",
+            "command": "forge script ./script/StaderHavenStakingManager.s.sol:DeployStakingManager --sig 'proxyUpgrade()' --broadcast --slow --rpc-url ${HOLESKY_URL} --private-key ${PRIVATE_KEY} --etherscan-api-key ${ETHERSCAN_API_KEY} --verify",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "PROXY_ADMIN": "0x6904603c27392310D19E389105CA792FB935C43C",
+                    "PROXY_ADDRESS": "0xDBAaD20ffd67dfaeBdE40b842cB78eAa18F1BB74",
+                }
+            },
+            "dependsOn": "test",
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            }
+        },
     ]
 }

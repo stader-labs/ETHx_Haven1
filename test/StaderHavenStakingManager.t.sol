@@ -3,29 +3,34 @@ pragma solidity 0.8.16;
 
 // solhint-disable
 
-import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import {
+    ITransparentUpgradeableProxy,
+    TransparentUpgradeableProxy
+} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
 
-import { HSETH } from "../src/HSETH.sol";
-import { StaderHavenStakingManager } from "../src/StaderHavenStakingManager.sol";
-import { IStaderHavenStakingManager } from "../src/interfaces/IStaderHavenStakingManager.sol";
-import { IStaderStakePoolManager } from "../src/interfaces/IStaderStakePoolManager.sol";
+import { Test, console } from "forge-std/Test.sol";
+
+import { HSETH } from "../contracts/HSETH.sol";
+import { StaderHavenStakingManager } from "../contracts/StaderHavenStakingManager.sol";
+import { IStaderHavenStakingManager } from "../contracts/interfaces/IStaderHavenStakingManager.sol";
+import { IStaderStakePoolManager } from "../contracts/interfaces/IStaderStakePoolManager.sol";
 
 import { ETHxMock } from "./mocks/ETHxMock.sol";
 import { StaderConfigMock } from "./mocks/StaderConfigMock.sol";
 import { StaderStakePoolManagerMock } from "./mocks/StaderStakePoolManagerMock.sol";
 import { StaderUserWithdrawManagerMock } from "./mocks/StaderUserWithdrawManagerMock.sol";
 
-import { Test, console } from "forge-std/Test.sol";
-
 contract StaderHavenStakingManagerTest is Test {
     uint256 public constant DECIMAL = 1e18;
 
+    event Upgraded(address indexed implementation);
     event WithdrawnProtocolFees(address treasury, uint256 protocolFeesAmount);
 
     address private admin;
     address private manager;
     address private treasury;
+    ProxyAdmin private proxyAdmin;
     HSETH private hsETH;
     address private ethX;
     StaderConfigMock private staderConfig;
@@ -46,19 +51,24 @@ contract StaderHavenStakingManagerTest is Test {
         staderConfig.updateUserWithdrawManager(userWithdrawManager);
         staderConfig.updateStaderStakePoolManager(staderStakePoolManager);
 
-        ProxyAdmin proxyAdmin = new ProxyAdmin();
+        proxyAdmin = new ProxyAdmin();
+        proxyAdmin.transferOwnership(admin);
         address hsETHImpl = address(new HSETH());
         address staderHavenStakingManagerImpl = address(new StaderHavenStakingManager());
 
-        TransparentUpgradeableProxy hsETHProxy = new TransparentUpgradeableProxy(hsETHImpl, address(proxyAdmin), "");
+        bytes memory hsETHInitData = abi.encodeWithSelector(HSETH.initialize.selector, admin);
+        TransparentUpgradeableProxy hsETHProxy =
+            new TransparentUpgradeableProxy(hsETHImpl, address(proxyAdmin), hsETHInitData);
         hsETH = HSETH(address(hsETHProxy));
-        hsETH.initialize(admin);
 
-        TransparentUpgradeableProxy staderHavenStakingManagerProxy =
-            new TransparentUpgradeableProxy(staderHavenStakingManagerImpl, address(proxyAdmin), "");
+        bytes memory staderHavenStakingManagerInitData = abi.encodeWithSelector(
+            StaderHavenStakingManager.initialize.selector, admin, address(hsETH), treasury, address(staderConfig)
+        );
+        TransparentUpgradeableProxy staderHavenStakingManagerProxy = new TransparentUpgradeableProxy(
+            staderHavenStakingManagerImpl, address(proxyAdmin), staderHavenStakingManagerInitData
+        );
 
         staderHavenStakingManager = StaderHavenStakingManager(address(staderHavenStakingManagerProxy));
-        staderHavenStakingManager.initialize(admin, address(hsETH), treasury, address(staderConfig));
         vm.startPrank(admin);
         staderHavenStakingManager.grantRole(staderHavenStakingManager.MANAGER(), manager);
         hsETH.grantRole(hsETH.MINTER_ROLE(), address(staderHavenStakingManager));
@@ -438,5 +448,14 @@ contract StaderHavenStakingManagerTest is Test {
         staderHavenStakingManager.updateStaderConfig(address(0));
         staderHavenStakingManager.updateStaderConfig(staderConfigAddr);
         assertEq(address(staderHavenStakingManager.staderConfig()), staderConfigAddr);
+    }
+
+    function testProxyUpgradeWorkflow() public {
+        address newImpl = address(new StaderHavenStakingManager());
+        ITransparentUpgradeableProxy proxy = ITransparentUpgradeableProxy(address(staderHavenStakingManager));
+        vm.prank(admin);
+        vm.expectEmit();
+        emit Upgraded(newImpl);
+        proxyAdmin.upgrade(proxy, newImpl);
     }
 }
