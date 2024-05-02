@@ -116,7 +116,7 @@ contract StaderHavenStakingManagerTest is Test {
     //Starting with ETHx/ETH ER as 1:1, will increase it to see the impact on hsETH to ETH ER (should be less than
     // latest ETHx ER).
     function testDepositWithZeroInitialSupplyOfETHx(uint64 amount) external {
-        vm.assume(amount > 0.1 ether && amount < 100 ether);
+        vm.assume(amount > staderConfig.getMinWithdrawAmount() && amount < 100 ether);
         address user = vm.addr(0x101);
         vm.deal(user, 5 * uint256(amount));
 
@@ -169,23 +169,32 @@ contract StaderHavenStakingManagerTest is Test {
         );
     }
 
-    function testDepositWithMinimumTokenRequirement() external {
+    function testDepositWithMinimumTokenRequirementNotMet() external {
         uint256 amount = 1 ether;
         address user = vm.addr(0x101);
-        vm.deal(user, 5 * amount);
+        vm.deal(user, amount);
         vm.expectRevert(
             abi.encodeWithSelector(IStaderHavenStakingManager.MinimumHsETHNotMet.selector, amount + 1 gwei, amount)
         );
-        vm.startPrank(user);
+        vm.prank(user);
         staderHavenStakingManager.deposit{ value: amount }(amount + 1 gwei);
-        vm.stopPrank();
+    }
+
+    function testDepositWithMinimumTokenRequirement() external {
+        uint256 amount = 1 ether;
+        address user = vm.addr(0x101);
+        vm.deal(user, amount);
+        vm.prank(user);
+        staderHavenStakingManager.deposit{ value: amount }(amount);
+        assertEq(hsETH.balanceOf(user), amount);
+        assertEq(hsETH.totalSupply(), amount);
     }
 
     //Testing unstake along with withdrawing protocol fee to check if any residue ETHx token in the contract.
     //This test verifies that there is residue ETHx token in the contract which is fine as rounding is preferring
     // protocol.
     function testRequestWithdrawWithSingleUser(uint64 amount) external {
-        vm.assume(amount > 0.1 ether && amount < 100 ether);
+        vm.assume(amount > staderConfig.getMinWithdrawAmount() && amount < 100 ether);
         address user = vm.addr(0x101);
         vm.deal(user, 5 * uint256(amount));
 
@@ -259,7 +268,7 @@ contract StaderHavenStakingManagerTest is Test {
     }
 
     function testRequestWithdrawProtocolFeeEvent(uint64 amount) external {
-        vm.assume(amount > 0.1 ether && amount < 100 ether);
+        vm.assume(amount > staderConfig.getMinWithdrawAmount() && amount < 100 ether);
         address user = vm.addr(0x101);
         vm.deal(user, 5 * uint256(amount));
 
@@ -339,7 +348,7 @@ contract StaderHavenStakingManagerTest is Test {
     // protocol.
     function testRequestWithdrawWithTwoUsers(uint64 randomSeed1, uint64 randomSeed2, uint64 amount) external {
         vm.assume(randomSeed1 > 0 && randomSeed2 > 0 && randomSeed1 != randomSeed2);
-        vm.assume(amount > 0.1 ether && amount < 100 ether);
+        vm.assume(amount > staderConfig.getMinWithdrawAmount() && amount < 100 ether);
         address user = vm.addr(randomSeed1);
         address user2 = vm.addr(randomSeed2);
         vm.deal(user, 5 * uint256(amount));
