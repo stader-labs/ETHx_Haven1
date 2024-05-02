@@ -4,6 +4,10 @@
 
 hsETH is an ERC-20 token developed by Stader Labs, specifically designed for the Staders restaking ecosystem. It allows users to deposit ETH tokens into the contract and mint liquid hsETH, providing unique opportunities for decentralized exchange liquidity pools. This facilitates easy entry and exit from positions representing restaked assets.
 
+### Audit History
+
+[AUDIT.md](AUDIT.md)
+
 ### Deployment
 
 | Contract                  | Address                                    | Network |
