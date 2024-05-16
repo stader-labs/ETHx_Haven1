@@ -28,12 +28,14 @@ contract DeployHSETH is Script {
     }
 
     function proxyDeploy() public {
-        address admin = vm.envAddress("HSETH_ADMIN");        
+        address tempAdmin = msg.sender;
+        // address admin = vm.envAddress("HSETH_ADMIN");
         address proxyAdmin = vm.envAddress("PROXY_ADMIN");
         vm.startBroadcast();
         HSETH implementation = new HSETH();
-        bytes memory initializationCalldata = abi.encodeWithSelector(implementation.initialize.selector, admin);
-        TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(address(implementation), proxyAdmin, initializationCalldata);
+        bytes memory initializationCalldata = abi.encodeWithSelector(implementation.initialize.selector, tempAdmin);
+        TransparentUpgradeableProxy proxy =
+            new TransparentUpgradeableProxy(address(implementation), proxyAdmin, initializationCalldata);
         console.log("hsETH Transparent Proxy: ", address(proxy));
         emit HsETHProxy(address(proxy));
         vm.stopBroadcast();
